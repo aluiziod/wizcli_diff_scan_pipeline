@@ -1,0 +1,46 @@
+name: Wiz CLI Dir Security Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  wiz-iac-scan:
+    name: Wiz dir Scan
+    runs-on: ubuntu-latest
+    env:
+      WIZ_CLIENT_ID: ${{ secrets.WIZ_CLIENT_ID }}
+      WIZ_CLIENT_SECRET: ${{ secrets.WIZ_CLIENT_SECRET }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download and Install Wiz CLI
+        run: |
+          curl -o wizcli https://downloads.wiz.io/v1/wizcli/latest/wizcli-linux-amd64
+          chmod +x wizcli
+
+      # Baseline creation — runs on push to main
+      - name: Run Baseline Scan
+        if: github.ref == 'refs/heads/main'
+        run: |
+          ./wizcli scan dir . --pass-always --log=baseline-debug.log
+
+      # Diff scan — runs on PRs into main
+      - name: Run diff-based scan
+        if: github.event_name == 'pull_request'
+        run: |
+          ./wizcli scan dir . \
+            --diff-scan \
+            --baseline-branches main \
+            --pass-always \
+            --log=diff-debug.log
+
+      - name: Upload debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wizcli-debug-logs
+          path: '*-debug.log'
